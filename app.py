@@ -4,7 +4,7 @@ import time
 import math
 import cv2
 import numpy as np
-import mediapipe as mp
+# NOTE: We DO NOT import mediapipe here anymore!
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from werkzeug.utils import secure_filename
 from moviepy.editor import VideoFileClip
@@ -59,6 +59,13 @@ def overlay_image_alpha(img, img_overlay, x, y, alpha_mask):
 
 def process_video_motion(video_path, image_path, output_path, watermark):
     """Core AI processing logic for face tracking and overlay."""
+    
+    # ---------------------------------------------------------
+    # THE FIX: Import mediapipe ONLY inside the function worker
+    # ---------------------------------------------------------
+    import mediapipe as mp
+    mp_face_mesh = mp.solutions.face_mesh
+    
     # Load overlay image
     img_overlay = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     if img_overlay is None: raise Exception("Invalid image file.")
@@ -74,8 +81,6 @@ def process_video_motion(video_path, image_path, output_path, watermark):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(temp_video_path, fourcc, fps, (w, h))
 
-    # LAZY LOADING: Only initialize MediaPipe when processing starts
-    mp_face_mesh = mp.solutions.face_mesh
     with mp_face_mesh.FaceMesh(
         max_num_faces=5, 
         min_detection_confidence=0.5, 
@@ -143,6 +148,7 @@ def process_video_motion(video_path, image_path, output_path, watermark):
     final_clip.close()
     if os.path.exists(temp_video_path): os.remove(temp_video_path)
 
+
 def cleanup_old_files():
     """Removes files older than 30 minutes to save Render disk space."""
     now = time.time()
@@ -201,6 +207,5 @@ def download(filename):
     return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
 
 if __name__ == '__main__':
-    # Render overrides this anyway, but it's good practice
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
