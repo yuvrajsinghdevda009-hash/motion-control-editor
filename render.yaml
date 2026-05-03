@@ -2,8 +2,8 @@ services:
   - type: web
     name: motion-control-saas
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: gunicorn app:app --timeout 120 --workers 2
     envVars:
       - key: PYTHON_VERSION
-        value: 3.10.0
+        value: 3.11.8
