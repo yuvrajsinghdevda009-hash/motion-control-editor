@@ -4,7 +4,9 @@ import time
 import math
 import cv2
 import numpy as np
-import mediapipe as mp  # <-- Moved back to the top! (Safe and lightweight)
+
+# THE FIX: Explicit deep import. Bypasses the Gunicorn "solutions" bug entirely!
+from mediapipe.python.solutions import face_mesh as mp_face_mesh
 
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from werkzeug.utils import secure_filename
@@ -21,9 +23,6 @@ ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-
-# Prepare MediaPipe reference (Does NOT use heavy RAM yet)
-mp_face_mesh = mp.solutions.face_mesh
 
 def allowed_file(filename, allowed_set):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_set
@@ -80,7 +79,7 @@ def process_video_motion(video_path, image_path, output_path, watermark):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(temp_video_path, fourcc, fps, (w, h))
 
-    # HEAVY AI LOADING HAPPENS HERE (Safe because it's only triggered on upload)
+    # AI Model loads ONLY here, protecting your RAM!
     with mp_face_mesh.FaceMesh(
         max_num_faces=5, 
         min_detection_confidence=0.5, 
