@@ -4,9 +4,7 @@ import time
 import math
 import cv2
 import numpy as np
-
-# THE FIX: Explicit deep import. Bypasses the Gunicorn "solutions" bug entirely!
-from mediapipe.python.solutions import face_mesh as mp_face_mesh
+import mediapipe as mp  # Normal import works perfectly now!
 
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from werkzeug.utils import secure_filename
@@ -60,11 +58,9 @@ def overlay_image_alpha(img, img_overlay, x, y, alpha_mask):
 
     img_crop[:] = alpha * img_overlay_crop[:, :, :3] + (1 - alpha) * img_crop
 
-
 def process_video_motion(video_path, image_path, output_path, watermark):
     """Core AI processing logic for face tracking and overlay."""
     
-    # Load overlay image
     img_overlay = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     if img_overlay is None: raise Exception("Invalid image file.")
     if len(img_overlay.shape) == 3 and img_overlay.shape[2] == 3:
@@ -79,7 +75,8 @@ def process_video_motion(video_path, image_path, output_path, watermark):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(temp_video_path, fourcc, fps, (w, h))
 
-    # AI Model loads ONLY here, protecting your RAM!
+    # MediaPipe is safely loaded inside the function to protect server RAM!
+    mp_face_mesh = mp.solutions.face_mesh
     with mp_face_mesh.FaceMesh(
         max_num_faces=5, 
         min_detection_confidence=0.5, 
@@ -148,7 +145,6 @@ def process_video_motion(video_path, image_path, output_path, watermark):
     final_clip.close()
     if os.path.exists(temp_video_path): os.remove(temp_video_path)
 
-
 def cleanup_old_files():
     """Removes files older than 30 minutes to save Render disk space."""
     now = time.time()
@@ -207,5 +203,5 @@ def download(filename):
     return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
