@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MotionControl AI Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Motion<span>Control</span></h1>
+            <p>AI-Powered Face Tracking & Replacement</p>
+        </header>
+
+        <main>
+            <form id="uploadForm">
+                <div class="grid-layout">
+                    <!-- Video Upload -->
+                    <div class="drop-zone" id="videoZone">
+                        <span class="icon">📹</span>
+                        <p>Drag & Drop Video (MP4)</p>
+                        <input type="file" id="videoInput" name="video" accept="video/mp4,video/avi,video/quicktime" required>
+                        <small id="videoName"></small>
+                    </div>
+
+                    <!-- Image Upload -->
+                    <div class="drop-zone" id="imageZone">
+                        <span class="icon">🖼️</span>
+                        <p>Drag & Drop PNG/JPG (Transparent PNG Best)</p>
+                        <input type="file" id="imageInput" name="image" accept="image/png,image/jpeg" required>
+                        <small id="imageName"></small>
+                    </div>
+                </div>
+
+                <div class="options-container">
+                    <input type="text" id="watermark" name="watermark" placeholder="Add Watermark (Optional)">
+                </div>
+
+                <button type="submit" id="processBtn">Generate Video 🚀</button>
+            </form>
+
+            <!-- Loading UI -->
+            <div id="loadingUI" class="hidden">
+                <div class="spinner"></div>
+                <p>AI is tracking and rendering... Please wait.</p>
+            </div>
+
+            <!-- Result UI -->
+            <div id="resultUI" class="hidden">
+                <h2>Processing Complete! 🎉</h2>
+                <video id="resultVideo" controls></video>
+                <a id="downloadBtn" href="#" download>Download Video</a>
+            </div>
+
+            <!-- Error Notification -->
+            <div id="errorToast" class="hidden"></div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
