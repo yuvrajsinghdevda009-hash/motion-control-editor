@@ -4,7 +4,8 @@ import time
 import math
 import cv2
 import numpy as np
-# NOTE: We DO NOT import mediapipe here anymore!
+import mediapipe as mp  # <-- Moved back to the top! (Safe and lightweight)
+
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from werkzeug.utils import secure_filename
 from moviepy.editor import VideoFileClip
@@ -20,6 +21,9 @@ ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+# Prepare MediaPipe reference (Does NOT use heavy RAM yet)
+mp_face_mesh = mp.solutions.face_mesh
 
 def allowed_file(filename, allowed_set):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_set
@@ -57,14 +61,9 @@ def overlay_image_alpha(img, img_overlay, x, y, alpha_mask):
 
     img_crop[:] = alpha * img_overlay_crop[:, :, :3] + (1 - alpha) * img_crop
 
+
 def process_video_motion(video_path, image_path, output_path, watermark):
     """Core AI processing logic for face tracking and overlay."""
-    
-    # ---------------------------------------------------------
-    # THE FIX: Import mediapipe ONLY inside the function worker
-    # ---------------------------------------------------------
-    import mediapipe as mp
-    mp_face_mesh = mp.solutions.face_mesh
     
     # Load overlay image
     img_overlay = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
@@ -81,6 +80,7 @@ def process_video_motion(video_path, image_path, output_path, watermark):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(temp_video_path, fourcc, fps, (w, h))
 
+    # HEAVY AI LOADING HAPPENS HERE (Safe because it's only triggered on upload)
     with mp_face_mesh.FaceMesh(
         max_num_faces=5, 
         min_detection_confidence=0.5, 
@@ -137,6 +137,7 @@ def process_video_motion(video_path, image_path, output_path, watermark):
     cap.release()
     out.release()
 
+    # Merge Audio
     orig_clip = VideoFileClip(video_path)
     final_clip = VideoFileClip(temp_video_path)
     if orig_clip.audio:
