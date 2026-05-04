@@ -1,7 +1,8 @@
-# Use a stable, lightweight Python version
+
+# Base Python image
 FROM python:3.11.8-slim
 
-# THE FIX: Install the missing C++ graphic libraries MediaPipe needs!
+# YAHAN HOTA HAI JADUU: MediaPipe ke liye missing C++ libraries install kar rahe hain!
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0 \
@@ -9,12 +10,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Install Python packages
+# Requirements install karein
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application
+# Baaki ka code copy karein
 COPY . .
 
-# Run Gunicorn smoothly on the port Render expects
-CMD ["sh", "-c", "gunicorn app:app --bind 0.0.0.0:${PORT:-10000} --timeout 120 --workers 1 --threads 2"]
+# Server start command
+CMD["python", "app.py"]
