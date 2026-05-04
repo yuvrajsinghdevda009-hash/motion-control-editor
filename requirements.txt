@@ -5,5 +5,4 @@ mediapipe>=0.10.30
 numpy<2.0.0
 moviepy==1.0.3
 imageio-ffmpeg==0.4.9
-gunicorn>=21.2.0
 setuptools>=65.5.0
