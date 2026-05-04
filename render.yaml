@@ -1,4 +1,9 @@
 services:
   - type: web
     name: motion-control-saas
-    env: docker
+    env: python
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
