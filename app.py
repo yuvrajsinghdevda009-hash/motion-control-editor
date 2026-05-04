@@ -3,8 +3,9 @@ import uuid
 import time
 import math
 import cv2
+import gc
 import numpy as np
-import mediapipe as mp  # Normal import works perfectly now!
+import mediapipe as mp
 
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from werkzeug.utils import secure_filename
@@ -15,52 +16,43 @@ app = Flask(__name__)
 # Configurations
 UPLOAD_FOLDER = 'uploads'
 OUTPUT_FOLDER = 'outputs'
-MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50 MB limit
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'mov', 'avi'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
+# Mediapipe is now 100% safe to import globally because we removed Gunicorn!
+mp_face_mesh = mp.solutions.face_mesh
+
 def allowed_file(filename, allowed_set):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_set
 
 def rotate_image(image, angle):
-    """Rotates an image and expands its bounding box so corners aren't cut off."""
     image_center = tuple(np.array(image.shape[1::-1]) / 2)
     rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
-    
     abs_cos = abs(rot_mat[0, 0])
     abs_sin = abs(rot_mat[0, 1])
     bound_w = int(image.shape[0] * abs_sin + image.shape[1] * abs_cos)
     bound_h = int(image.shape[0] * abs_cos + image.shape[1] * abs_sin)
-    
     rot_mat[0, 2] += bound_w / 2 - image_center[0]
     rot_mat[1, 2] += bound_h / 2 - image_center[1]
-    
     result = cv2.warpAffine(image, rot_mat, (bound_w, bound_h), flags=cv2.INTER_LINEAR, 
                             borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
     return result
 
 def overlay_image_alpha(img, img_overlay, x, y, alpha_mask):
-    """Blends the overlay image onto the background frame using an alpha channel."""
     y1, y2 = max(0, y), min(img.shape[0], y + img_overlay.shape[0])
     x1, x2 = max(0, x), min(img.shape[1], x + img_overlay.shape[1])
-
     y1o, y2o = max(0, -y), min(img_overlay.shape[0], img.shape[0] - y)
     x1o, x2o = max(0, -x), min(img_overlay.shape[1], img.shape[1] - x)
-
     if y1 >= y2 or x1 >= x2 or y1o >= y2o or x1o >= x2o: return
-
     img_crop = img[y1:y2, x1:x2]
     img_overlay_crop = img_overlay[y1o:y2o, x1o:x2o]
     alpha = alpha_mask[y1o:y2o, x1o:x2o, np.newaxis] / 255.0
-
     img_crop[:] = alpha * img_overlay_crop[:, :, :3] + (1 - alpha) * img_crop
 
 def process_video_motion(video_path, image_path, output_path, watermark):
-    """Core AI processing logic for face tracking and overlay."""
-    
     img_overlay = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     if img_overlay is None: raise Exception("Invalid image file.")
     if len(img_overlay.shape) == 3 and img_overlay.shape[2] == 3:
@@ -75,14 +67,11 @@ def process_video_motion(video_path, image_path, output_path, watermark):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(temp_video_path, fourcc, fps, (w, h))
 
-    # MediaPipe is safely loaded inside the function to protect server RAM!
-    mp_face_mesh = mp.solutions.face_mesh
     with mp_face_mesh.FaceMesh(
         max_num_faces=5, 
         min_detection_confidence=0.5, 
         min_tracking_confidence=0.5
     ) as face_mesh:
-    
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret: break
@@ -109,6 +98,8 @@ def process_video_motion(video_path, image_path, output_path, watermark):
                     angle = math.degrees(math.atan2(dy, dx))
 
                     face_w, face_h = x_max - x_min, y_max - y_min
+                    if face_w <= 0 or face_h <= 0: continue
+                    
                     scale_factor = 1.6 
                     new_w = max(10, int(face_w * scale_factor))
                     new_h = max(10, int(face_h * scale_factor))
@@ -133,7 +124,7 @@ def process_video_motion(video_path, image_path, output_path, watermark):
     cap.release()
     out.release()
 
-    # Merge Audio
+    # Audio Merge
     orig_clip = VideoFileClip(video_path)
     final_clip = VideoFileClip(temp_video_path)
     if orig_clip.audio:
@@ -144,11 +135,13 @@ def process_video_motion(video_path, image_path, output_path, watermark):
     orig_clip.close()
     final_clip.close()
     if os.path.exists(temp_video_path): os.remove(temp_video_path)
+    
+    # Clean memory to protect 512MB free tier limit
+    gc.collect()
 
 def cleanup_old_files():
-    """Removes files older than 30 minutes to save Render disk space."""
     now = time.time()
-    for folder in [UPLOAD_FOLDER, OUTPUT_FOLDER]:
+    for folder in[UPLOAD_FOLDER, OUTPUT_FOLDER]:
         for f in os.listdir(folder):
             path = os.path.join(folder, f)
             if os.path.isfile(path) and os.stat(path).st_mtime < now - 1800:
@@ -169,11 +162,6 @@ def process_api():
     image = request.files['image']
     watermark = request.form.get('watermark', '').strip()
 
-    if not allowed_file(video.filename, ALLOWED_VIDEO_EXTENSIONS):
-        return jsonify({"error": "Invalid video format."}), 400
-    if not allowed_file(image.filename, ALLOWED_IMAGE_EXTENSIONS):
-        return jsonify({"error": "Invalid image format."}), 400
-
     uid = str(uuid.uuid4())
     video_ext = video.filename.rsplit('.', 1)[1].lower()
     img_ext = image.filename.rsplit('.', 1)[1].lower()
@@ -188,8 +176,8 @@ def process_api():
 
     try:
         process_video_motion(video_path, image_path, output_path, watermark)
-        os.remove(video_path)
-        os.remove(image_path)
+        if os.path.exists(video_path): os.remove(video_path)
+        if os.path.exists(image_path): os.remove(image_path)
 
         return jsonify({
             "success": True,
@@ -203,5 +191,6 @@ def download(filename):
     return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
 
 if __name__ == '__main__':
+    # Direct Flask Server (NO GUNICORN!)
     port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, threaded=True)
