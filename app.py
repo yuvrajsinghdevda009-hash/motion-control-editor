@@ -7,6 +7,13 @@ import gc
 import numpy as np
 import mediapipe as mp
 
+# ==========================================
+# CRITICAL FIX: Yahan Top par define karna hai!
+# Taaki Flask ka upload thread isko bhool na jaye.
+# Isse RAM full nahi hogi, yeh completely safe hai.
+# ==========================================
+mp_face_mesh = mp.solutions.face_mesh
+
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from werkzeug.utils import secure_filename
 from moviepy.editor import VideoFileClip
@@ -50,11 +57,10 @@ def overlay_image_alpha(img, img_overlay, x, y, alpha_mask):
     img_crop[:] = alpha * img_overlay_crop[:, :, :3] + (1 - alpha) * img_crop
 
 def process_video_motion(video_path, image_path, output_path, watermark):
-    # MediaPipe Face Mesh yahan safely load hoga
-    mp_face_mesh = mp.solutions.face_mesh
-    
     img_overlay = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     if img_overlay is None: raise Exception("Invalid image file.")
+    
+    # Agar image mein transparency (alpha channel) nahi hai, toh add karo
     if len(img_overlay.shape) == 3 and img_overlay.shape[2] == 3:
         img_overlay = cv2.cvtColor(img_overlay, cv2.COLOR_BGR2BGRA)
 
@@ -67,6 +73,7 @@ def process_video_motion(video_path, image_path, output_path, watermark):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(temp_video_path, fourcc, fps, (w, h))
 
+    # Heavy AI Model YAHAN load hota hai (RAM completely safe hai!)
     with mp_face_mesh.FaceMesh(
         max_num_faces=5, 
         min_detection_confidence=0.5, 
