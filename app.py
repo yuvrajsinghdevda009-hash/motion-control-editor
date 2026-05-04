@@ -22,9 +22,6 @@ ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-# Mediapipe is now 100% safe to import globally because we removed Gunicorn!
-mp_face_mesh = mp.solutions.face_mesh
-
 def allowed_file(filename, allowed_set):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_set
 
@@ -53,6 +50,9 @@ def overlay_image_alpha(img, img_overlay, x, y, alpha_mask):
     img_crop[:] = alpha * img_overlay_crop[:, :, :3] + (1 - alpha) * img_crop
 
 def process_video_motion(video_path, image_path, output_path, watermark):
+    # MediaPipe Face Mesh yahan safely load hoga
+    mp_face_mesh = mp.solutions.face_mesh
+    
     img_overlay = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     if img_overlay is None: raise Exception("Invalid image file.")
     if len(img_overlay.shape) == 3 and img_overlay.shape[2] == 3:
@@ -136,7 +136,6 @@ def process_video_motion(video_path, image_path, output_path, watermark):
     final_clip.close()
     if os.path.exists(temp_video_path): os.remove(temp_video_path)
     
-    # Clean memory to protect 512MB free tier limit
     gc.collect()
 
 def cleanup_old_files():
@@ -191,6 +190,5 @@ def download(filename):
     return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
 
 if __name__ == '__main__':
-    # Direct Flask Server (NO GUNICORN!)
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port, threaded=True)
